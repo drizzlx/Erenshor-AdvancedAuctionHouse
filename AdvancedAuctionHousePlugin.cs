@@ -71,7 +71,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private Button _noButton;
 
     private Text _buyPromptText;
-    
+    private Coroutine _activeListingCoroutine;
     private AuctionHouseListing _selectedAuctionHouseListing;
         
     private void Awake()
@@ -125,44 +125,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
-        // Destroy minimap UI root
-        if (_auctionHouseUIRoot != null)
-        {
-            Destroy(_auctionHouseUIRoot);
-            _auctionHouseUIRoot = null;
-        }
-        
-        if (_listingPanelRoot != null)
-        {
-            Destroy(_listingPanelRoot);
-            _listingPanelRoot = null;
-        }
-        
-        if (_weaponsClassSubPanel != null)
-        {
-            Destroy(_weaponsClassSubPanel);
-            _weaponsClassSubPanel = null;
-        }
-        
-        if (_weaponsTypeSubPanel != null)
-        {
-            Destroy(_weaponsTypeSubPanel);
-            _weaponsTypeSubPanel = null;
-        }
-        
-        if (_armorClassSubPanel != null)
-        {
-            Destroy(_armorClassSubPanel);
-            _armorClassSubPanel = null;
-        }
-        
-        if (_armorTypeSubPanel != null)
-        {
-            Destroy(_armorTypeSubPanel);
-            _armorTypeSubPanel = null;
-        }
-        
-        _defaultLoaded = false;
+        CloseAuctionHouseUI();
         
         _harmony?.UnpatchSelf();
         _harmony = null;
@@ -179,10 +142,87 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
     public void CloseAuctionHouseUI()
     {
-        if (_auctionHouseUIRoot != null)
-            _auctionHouseUIRoot.SetActive(false);
-        
+        // Cancel running coroutines
+        if (_activeListingCoroutine != null)
+        {
+            StopCoroutine(_activeListingCoroutine);
+            _activeListingCoroutine = null;
+        }
+
+        // Remove scroll listeners
+        if (_listingScrollRect != null)
+        {
+            _listingScrollRect.onValueChanged.RemoveListener(OnScrollValueChanged);
+            _listingScrollRect = null;
+        }
+
+        DestroyUI();
+
+        _selectedAuctionHouseListing = null;
         _defaultLoaded = false;
+    }
+    
+    private void DestroyUI()
+    {
+        // Clear listing panel rows explicitly
+        if (_listingPanelRoot != null)
+        {
+            foreach (Transform child in _listingPanelRoot.transform)
+            {
+                Destroy(child.gameObject);
+            }
+
+            Destroy(_listingPanelRoot);
+            _listingPanelRoot = null;
+        }
+
+        // Clear confirm panel contents
+        if (_confirmPanel != null)
+        {
+            foreach (Transform child in _confirmPanel.transform)
+            {
+                Destroy(child.gameObject);
+            }
+
+            Destroy(_confirmPanel);
+            _confirmPanel = null;
+        }
+
+        // Destroy subpanels if still alive
+        if (_weaponsClassSubPanel != null)
+        {
+            Destroy(_weaponsClassSubPanel);
+            _weaponsClassSubPanel = null;
+        }
+
+        if (_weaponsTypeSubPanel != null)
+        {
+            Destroy(_weaponsTypeSubPanel);
+            _weaponsTypeSubPanel = null;
+        }
+
+        if (_armorClassSubPanel != null)
+        {
+            Destroy(_armorClassSubPanel);
+            _armorClassSubPanel = null;
+        }
+
+        if (_armorTypeSubPanel != null)
+        {
+            Destroy(_armorTypeSubPanel);
+            _armorTypeSubPanel = null;
+        }
+
+        // Destroy root last
+        if (_auctionHouseUIRoot != null)
+        {
+            Destroy(_auctionHouseUIRoot);
+            _auctionHouseUIRoot = null;
+        }
+
+        // Reset page state
+        _loadedPage = 0;
+        _isLoadingPage = false;
     }
 
     public void OpenAuctionHouseUI()
@@ -405,43 +445,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         closeBtn.targetGraphic = closeBgImage;
         closeBtn.onClick.AddListener(() =>
         {
-            if (_auctionHouseUIRoot != null)
-            {
-                Destroy(_auctionHouseUIRoot);
-                _auctionHouseUIRoot = null;
-            }
-        
-            if (_listingPanelRoot != null)
-            {
-                Destroy(_listingPanelRoot);
-                _listingPanelRoot = null;
-            }
-        
-            if (_weaponsClassSubPanel != null)
-            {
-                Destroy(_weaponsClassSubPanel);
-                _weaponsClassSubPanel = null;
-            }
-        
-            if (_weaponsTypeSubPanel != null)
-            {
-                Destroy(_weaponsTypeSubPanel);
-                _weaponsTypeSubPanel = null;
-            }
-        
-            if (_armorClassSubPanel != null)
-            {
-                Destroy(_armorClassSubPanel);
-                _armorClassSubPanel = null;
-            }
-        
-            if (_armorTypeSubPanel != null)
-            {
-                Destroy(_armorTypeSubPanel);
-                _armorTypeSubPanel = null;
-            }
-        
-            _defaultLoaded = false;
+            CloseAuctionHouseUI();
         });
 
         // === Close Button Text ===
@@ -1863,7 +1867,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         _isLoadingPage = true;
 
-        StartCoroutine(GetListingsByCategoryAsync(_currentCategory, _loadedPage, _listingsPerPage, listings =>
+        _activeListingCoroutine = StartCoroutine(GetListingsByCategoryAsync(_currentCategory, _loadedPage, _listingsPerPage, listings =>
         {
             if (_loadedPage == 0)
                 CreateListingHeaderRow(_listingPanelRoot.transform); // Only on first load
