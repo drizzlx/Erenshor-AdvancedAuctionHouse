@@ -10,8 +10,6 @@ namespace AdvancedAuctionHouse.patch
         [HarmonyPostfix]
         public static void Postfix(AuctionHouseUI __instance)
         {
-            // Close the original window
-            __instance.AHWindow.SetActive(false);
             // Open custom UI
             AdvancedAuctionHousePlugin.Instance.OpenAuctionHouseUI();
         }
@@ -24,7 +22,11 @@ namespace AdvancedAuctionHouse.patch
         [HarmonyPrefix]
         public static bool Prefix(AuctionHouseUI __instance)
         {
-            return true;
+            if (AdvancedAuctionHousePlugin.Instance == null)
+                return true;
+            
+            return 
+                AdvancedAuctionHousePlugin.Instance.HandleAuctionHouseWindowClosing(__instance);
         }
     }
 }

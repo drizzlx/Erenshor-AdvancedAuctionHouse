@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using BepInEx;
 using HarmonyLib;
 using UnityEngine;
@@ -18,7 +19,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     private Harmony _harmony;
     
-    private GameObject _auctionHouseUIRoot;
+    public GameObject auctionHouseUIRoot;
     private GameObject _listingPanelRoot;
     private GameObject _weaponsClassSubPanel;
     private GameObject _weaponsTypeSubPanel;
@@ -30,6 +31,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     private readonly float _auctionHouseUIWidth = 1000f;
     private readonly float _auctionHouseUIHeight = 500f;
+    private readonly float _leftPanelWidthOfParent = 0.25f;
     
     private readonly int _pageCount = 9999;
     
@@ -57,6 +59,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private string _currentCategory = "Default";
     
     private readonly float _listingIconWidth = 40f;
+    private readonly float _buyoutButtonWidth = 80f;
     
     // Lazy loading
     private int _loadedPage = 0;
@@ -214,10 +217,10 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         }
 
         // Destroy root last
-        if (_auctionHouseUIRoot != null)
+        if (auctionHouseUIRoot != null)
         {
-            Destroy(_auctionHouseUIRoot);
-            _auctionHouseUIRoot = null;
+            Destroy(auctionHouseUIRoot);
+            auctionHouseUIRoot = null;
         }
 
         // Reset page state
@@ -225,16 +228,20 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         _isLoadingPage = false;
     }
 
-    public void OpenAuctionHouseUI()
+    public void OpenAuctionHouseUI(string tab = "BrowseTab")
     {
-        if (_auctionHouseUIRoot == null)
-            CreateAuctionHouseUI("browse");
+        if (auctionHouseUIRoot == null)
+            CreateAuctionHouseUI(tab);
 
-        if (_auctionHouseUIRoot != null)
+        if (auctionHouseUIRoot != null)
         {
             GameData.PlayerAuctionItemsOpen = false;
-            GameData.AuctionWindowOpen = true;
-            _auctionHouseUIRoot.SetActive(true);
+            
+            // Disable core functionality
+            GameData.AHUI.AHWindow.SetActive(false);
+            GameData.AuctionWindowOpen = false;
+            
+            auctionHouseUIRoot.SetActive(true);
             
             if (!_defaultLoaded)
             {
@@ -266,7 +273,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         var panelGo = new GameObject("AuctionHouseUIPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
         panelGo.transform.SetParent(canvasGo.transform, false);
         
-        _auctionHouseUIRoot = panelGo;
+        auctionHouseUIRoot = panelGo;
         
         var rect = panelGo.GetComponent<RectTransform>();
         
@@ -349,8 +356,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         btnRect.anchorMin = new Vector2(1f, 0.5f);
         btnRect.anchorMax = new Vector2(1f, 0.5f);
         btnRect.pivot = new Vector2(1f, 0.5f);
-        btnRect.sizeDelta = new Vector2(80f, headerHeight * 0.65f);
-        btnRect.anchoredPosition = new Vector2(-80f + -40f, 0f);
+        btnRect.sizeDelta = new Vector2(_buyoutButtonWidth, headerHeight * 0.65f);
+        btnRect.anchoredPosition = new Vector2(-_buyoutButtonWidth + -40f, 0f);
 
         // === Background with Outline ===
         var bgGo = new GameObject("ButtonBackground", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
@@ -421,7 +428,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         closeBtnRect.anchorMin = new Vector2(1f, 0.5f);
         closeBtnRect.anchorMax = new Vector2(1f, 0.5f);
         closeBtnRect.pivot = new Vector2(1f, 0.5f);
-        closeBtnRect.sizeDelta = new Vector2(80f, headerHeight * 0.65f);
+        closeBtnRect.sizeDelta = new Vector2(_buyoutButtonWidth, headerHeight * 0.65f);
         closeBtnRect.anchoredPosition = new Vector2(-25f, 0f); // 25px from left
 
         // === Background with Outline ===
@@ -445,7 +452,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         closeBtn.targetGraphic = closeBgImage;
         closeBtn.onClick.AddListener(() =>
         {
-            CloseAuctionHouseUI();
+            HandleAuctionHouseWindowClosing(GameData.AHUI, true);
         });
 
         // === Close Button Text ===
@@ -465,6 +472,41 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         closeTxt.color = _buyButtonEnabledTextColor;
         closeTxt.fontSize = 18;
         
+        // === Bottom Tabs Container ===
+        var tabContainerGo = new GameObject("BottomTabs", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+        tabContainerGo.transform.SetParent(footerGo.transform, false);
+
+        var tabContainerRect = tabContainerGo.GetComponent<RectTransform>();
+        tabContainerRect.anchorMin = new Vector2(0f, 0f);
+        tabContainerRect.anchorMax = new Vector2(0f, 0f);
+        tabContainerRect.pivot = new Vector2(0f, 1f);
+        tabContainerRect.anchoredPosition = new Vector2((_auctionHouseUIWidth * _leftPanelWidthOfParent) / 6, -borderRect.offsetMax.y); // Hang down from footer
+        tabContainerRect.sizeDelta = new Vector2(_buyoutButtonWidth * 2, headerHeight * 0.65f); // enough for two buttons side by side
+        
+        // Layout for spacing
+        var hLayout = tabContainerGo.GetComponent<HorizontalLayoutGroup>();
+        hLayout.childForceExpandWidth = true;
+        hLayout.childForceExpandHeight = true;
+        hLayout.spacing = 5f;
+        hLayout.padding = new RectOffset(0, 0, 0, 0);
+        hLayout.childAlignment = TextAnchor.MiddleCenter;
+        
+        var tabFitter = tabContainerGo.GetComponent<ContentSizeFitter>();
+        tabFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        tabFitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+        
+        CreateTabButton("BrowseTab", "Buy", tabContainerGo.transform, headerHeight, () =>
+        {
+            CloseAuctionHouseUI();
+            OpenAuctionHouseUI("BrowseTab");
+        });
+        
+        CreateTabButton("SellTab", "Sell", tabContainerGo.transform, headerHeight, () =>
+        {
+            CloseAuctionHouseUI();
+            OpenAuctionHouseUI("SellTab");
+        });
+        
         // === Left Panel ===
         var leftPanelGo = new GameObject("AuctionHouseUILeftPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         leftPanelGo.transform.SetParent(panelGo.transform, false);
@@ -481,7 +523,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         var leftScrollRectRect = leftScrollRectGo.GetComponent<RectTransform>();
         leftScrollRectRect.anchorMin = new Vector2(0f, 0f);
-        leftScrollRectRect.anchorMax = new Vector2(0.25f, 1f);
+        leftScrollRectRect.anchorMax = new Vector2(_leftPanelWidthOfParent, 1f);
         leftScrollRectRect.pivot = new Vector2(0f, 1f);
         leftScrollRectRect.offsetMin = new Vector2(0f, headerHeight);
         leftScrollRectRect.offsetMax = new Vector2(0f, -headerHeight);
@@ -529,7 +571,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         fitterLeft.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         fitterLeft.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
-        if (tab == "browse")
+        if (tab == "BrowseTab")
         {
             _showAllButton = CreateCategoryButton("View All Listings", leftPanelGo.transform);
         
@@ -587,7 +629,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         rightPanelGo.transform.SetParent(panelGo.transform, false);
 
         var rightRect = rightPanelGo.GetComponent<RectTransform>();
-        rightRect.anchorMin = new Vector2(0.25f, 0f);
+        rightRect.anchorMin = new Vector2(_leftPanelWidthOfParent, 0f);
         rightRect.anchorMax = new Vector2(1f, 1f); // full height
         rightRect.pivot = new Vector2(0f, 1f);
         rightRect.offsetMin = new Vector2(0f, headerHeight + 5f);
@@ -699,7 +741,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         // === Confirmation Dialog Panel ===
         _confirmPanel = new GameObject("ConfirmBuyPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        _confirmPanel.transform.SetParent(_auctionHouseUIRoot.transform, false);
+        _confirmPanel.transform.SetParent(auctionHouseUIRoot.transform, false);
 
         var confirmRect = _confirmPanel.GetComponent<RectTransform>();
         confirmRect.sizeDelta = new Vector2(300f, 150f);
@@ -744,6 +786,50 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         {
             _confirmPanel.SetActive(false);
         });
+    }
+    
+    GameObject CreateTabButton(string name, string label, Transform parent, float headerHeight, UnityEngine.Events.UnityAction onClick)
+    {
+        var tabGo = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Button), typeof(Image), typeof(LayoutElement), typeof(Outline));
+        tabGo.transform.SetParent(parent, false);
+        
+        tabGo.GetComponent<LayoutElement>().minWidth = 100f;
+        
+        var rect = tabGo.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        rect.pivot = new Vector2(0f, 0.5f);
+        
+        var image = tabGo.GetComponent<Image>();
+        image.color = new Color(0.2f, 0.2f, 0.2f, 1f);
+        
+        var outline = tabGo.GetComponent<Outline>();
+        outline.effectColor = _borderColor;
+        outline.effectDistance = new Vector2(1f, 1f);
+        
+        var btn = tabGo.GetComponent<Button>();
+        btn.onClick.AddListener(onClick);
+        btn.targetGraphic = image;
+        
+        var textGo = new GameObject(label + "Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        textGo.transform.SetParent(tabGo.transform, false);
+        
+        var textRect = textGo.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+        
+        var text = textRect.GetComponent<Text>();
+        text.text = label;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        text.color = Color.white;
+        text.fontSize = 18;
+
+        return tabGo;
     }
     
     void SetButtonInteractable(Button button, bool state, Color enabledTextColor, Color disabledTextColor)
@@ -1967,6 +2053,44 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     {
         if (!_isLoadingPage)
             LoadNextPage();
+    }
+    
+    public bool HandleAuctionHouseWindowClosing(AuctionHouseUI instance, bool force = false)
+    {
+        if (Instance == null || Instance.auctionHouseUIRoot == null)
+            return false;
+            
+        if (!Instance.auctionHouseUIRoot.activeSelf)
+            return false;
+            
+        var locField = typeof(AuctionHouseUI).GetField("Loc", BindingFlags.NonPublic | BindingFlags.Instance);
+        var startField = typeof(AuctionHouseUI).GetField("start", BindingFlags.NonPublic | BindingFlags.Instance);
+        var clearWindowMethod = typeof(AuctionHouseUI).GetMethod("ClearWindow", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        if (locField == null || startField == null || clearWindowMethod == null)
+            return false;
+            
+        var loc = locField.GetValue(instance);
+
+        if (loc == null)
+            return false;
+
+        var pressedEscape = Input.GetKeyDown(KeyCode.Escape);
+        var tooFar = Vector3.Distance(GameData.PlayerControl.transform.position, (Vector3) loc) > 5.0;
+
+        if (pressedEscape || tooFar || force)
+        {
+            GameData.PlayerAuctionItemsOpen = false;
+            instance.CurrentSellerData = null;
+            GameData.AuctionWindowOpen = false;
+            clearWindowMethod.Invoke(instance, null);
+            startField.SetValue(instance, 0);
+            instance.ListWindow.SetActive(false);
+            instance.AHWindow.SetActive(false);
+            Instance.CloseAuctionHouseUI();
+        }
+
+        return false;
     }
 }
 
