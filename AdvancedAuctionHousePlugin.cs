@@ -26,8 +26,9 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private GameObject _armorClassSubPanel;
     private GameObject _armorTypeSubPanel;
     
-    public static Vector2 SavedAuctionHouseSize;
-    public static Vector2 SavedAuctionHousePosition;
+    public static Vector2 SavedAuctionHouseSize = Vector2.zero;
+    public static Vector2 SavedAuctionHousePosition = Vector2.zero;
+    private Transform _panelGoTransform;
     
     private readonly float _auctionHouseUIWidth = 1000f;
     private readonly float _auctionHouseUIHeight = 500f;
@@ -327,6 +328,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
     public void OpenAuctionHouseUI(string tab = "BrowseTab")
     {
+        if (IsAuctionHouseWindowOpen()) 
+            CloseAuctionHouseUI();
+        
+        _currentTab = tab;
+        
         if (auctionHouseUIRoot == null)
             CreateAuctionHouseUI(tab);
 
@@ -359,17 +365,19 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
             else if (tab == "SellTab")
             {
                 var playerListings = GetPlayerListings();
+                
+                _listingPanelRoot.SetActive(false);
 
                 CreateListingHeaderRow(_listingPanelRoot.transform);
                 
                 foreach (var listing in playerListings)
                     CreateListingRow(listing, _listingPanelRoot.transform);
                 
+                _listingPanelRoot.SetActive(true);
+                
                 SetButtonInteractable(_buyButton, false, _buyButtonEnabledTextColor, _buyButtonDisabledTextColor);
             }
         }
-
-        _currentTab = tab;
     }
 
     private void CreateAuctionHouseUI(string tab)
@@ -380,8 +388,14 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.overrideSorting = true;
         canvas.sortingOrder = 0; // 0 for behind other UI elements
+        
+        var group = canvasGo.AddComponent<CanvasGroup>();
+        group.blocksRaycasts = true;
+        group.interactable = true;
 
         var panelGo = CreateAuctionHouseUIPanel(canvas.transform);
+        
+        panelGo.SetActive(false);
         
         CreateAuctionHouseUIBorder(panelGo.transform);
         CreateAuctionHouseUIHeader(panelGo.transform);
@@ -396,6 +410,38 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         CreateAuctionHouseUILeftPanelButtons(leftPanelGo.transform, tab);
         CreateAuctionHouseUIRightPanel(panelGo.transform, tab);
         CreateAuctionHouseUIConfirmationDialogue(auctionHouseUIRoot.transform);
+        
+        // === Drag Handle (diamond style) ===
+        var dragHandle = new GameObject("AuctionHouseDragHandle", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(DragUI));
+        dragHandle.name = "AuctionHouseDiamondDragHandle";
+        dragHandle.transform.SetParent(panelGo.transform, false);
+
+        var handleRect = dragHandle.GetComponent<RectTransform>();
+        handleRect.sizeDelta = new Vector2(14, 14);
+        handleRect.anchorMin = new Vector2(1f, 1f);
+        handleRect.anchorMax = new Vector2(1f, 1f);
+        handleRect.pivot = new Vector2(0.5f, 0.5f);
+        handleRect.anchoredPosition = new Vector2(0f, 0f);
+
+        var handleImage = dragHandle.GetComponent<Image>();
+        handleImage.sprite = Sprite.Create(
+            MakeDiamondGradientTexture(new Color(0.0667f, 0.5333f, 0.7529f, 0.9f)),
+            new Rect(0, 0, 2, 2),
+            new Vector2(0.5f, 0.5f)
+        );
+        handleImage.type = Image.Type.Simple;
+        handleImage.raycastTarget = true;
+
+        dragHandle.transform.localRotation = Quaternion.Euler(0, 0, 45f);
+
+        // Drag logic setup
+        var handleDrag = dragHandle.GetComponent<DragUI>();
+        handleDrag.Parent = panelGo.transform;
+        handleDrag.isInv = false;
+
+        _panelGoTransform = handleDrag.Parent;
+        
+        panelGo.SetActive(true);
     }
 
     private GameObject CreateAuctionHouseUIPanel(Transform parent)
@@ -418,7 +464,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(1f, 1f);
 
         if (SavedAuctionHousePosition != Vector2.zero)
         {
@@ -426,7 +472,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         }
         else
         {
-            rect.anchoredPosition = Vector2.zero;
+            rect.anchoredPosition = new Vector2(-_auctionHouseUIWidth / 2f, -_auctionHouseUIHeight / 2f);
         }
         
         _headerHeight = rect.sizeDelta.y * 0.1f;
@@ -831,8 +877,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         layoutGroup.childForceExpandWidth = true;   // Stretch width
         layoutGroup.childForceExpandHeight = false; // Don't force height (unless you want equal height buttons)
         layoutGroup.childAlignment = TextAnchor.UpperCenter;
-        layoutGroup.spacing = 3f; // space between buttons
-        layoutGroup.padding = new RectOffset(10, 0, 10, 10); // ← left, right, top, bottom
+        layoutGroup.spacing = _currentTab == "SellTab" ? 10f : 3f; // space between buttons
+        layoutGroup.padding = new RectOffset(0, 0, 10, 10); // ← left, right, top, bottom
         
         var fitterLeft = leftPanelGo.AddComponent<ContentSizeFitter>();
         fitterLeft.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
@@ -964,6 +1010,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         priceInputGo.transform.SetParent(parent, false);
 
         var priceLayout = priceInputGo.AddComponent<HorizontalLayoutGroup>();
+        priceLayout.childForceExpandWidth = true;
+        priceLayout.childControlWidth = true;
         priceLayout.childAlignment = TextAnchor.MiddleCenter;
         priceLayout.padding = new RectOffset(10, 10, 5, 5);
         priceLayout.spacing = 5f;
@@ -978,30 +1026,55 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         // === Sell Price Label ===
         var labelGo = new GameObject("SellPriceLabel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
         labelGo.transform.SetParent(priceInputGo.transform, false);
+        
+        var labelLayout = labelGo.AddComponent<LayoutElement>();
+        labelLayout.preferredWidth = 80f; // or 100f if you want wider label
+        labelLayout.flexibleWidth = 0f;
 
         var labelText = labelGo.GetComponent<Text>();
-        labelText.text = "Sell Price:";
+        labelText.text = "Sell Price";
         labelText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
         labelText.fontSize = 16;
         labelText.alignment = TextAnchor.MiddleLeft;
-        labelText.color = Color.white;
+        labelText.color = _buyButtonEnabledTextColor;
 
         var labelRect = labelGo.GetComponent<RectTransform>();
-        labelRect.sizeDelta = new Vector2(100f, 30f);  // Width can be tweaked as needed
+        labelRect.sizeDelta = new Vector2(1f, 30f);  // Width can be tweaked as needed
 
         // === Buyout Input Field ===
         var inputFieldGo = new GameObject("BuyoutPriceInput", typeof(RectTransform), typeof(CanvasRenderer), typeof(InputField), typeof(Image));
         inputFieldGo.transform.SetParent(priceInputGo.transform, false);
+        
+        var inputLayout = inputFieldGo.AddComponent<LayoutElement>();
+        inputLayout.flexibleWidth = 1f;
+        inputLayout.minWidth = 100f; // prevents collapsing too small
+        inputLayout.preferredHeight = 30f;
 
+        // Background with rounded sprite and subtle tint
         var inputImage = inputFieldGo.GetComponent<Image>();
-        inputImage.color = Color.white;
+        inputImage.sprite = CreateRoundedSprite(); // custom helper
+        inputImage.type = Image.Type.Sliced;
+        inputImage.color = _scrollBarColor;
+
+        // Add outline
+        var outline = inputFieldGo.AddComponent<Outline>();
+        outline.effectColor = new Color(0.6f, 0.4f, 0.2f, 1f); // autumn brown
+        outline.effectDistance = new Vector2(1f, -1f);
+
 
         var inputField = inputFieldGo.GetComponent<InputField>();
+        
         inputField.textComponent = CreateUIText(inputFieldGo.transform, "", 16, TextAnchor.MiddleCenter);
-        inputField.placeholder = CreateUIText(inputFieldGo.transform, "Gold", 16, TextAnchor.MiddleCenter, 0.5f);
-
-        var inputRect = inputFieldGo.GetComponent<RectTransform>();
-        inputRect.sizeDelta = new Vector2(150f, 30f);
+        inputField.textComponent.color = _buyButtonEnabledTextColor;
+        
+        inputField.placeholder = CreateUIText(inputFieldGo.transform, "Gold", 16, TextAnchor.MiddleCenter);
+        inputField.placeholder.color = _buyButtonDisabledTextColor;
+        
+        inputField.contentType = InputField.ContentType.Custom;
+        inputField.onValidateInput += (string text, int charIndex, char addedChar) =>
+        {
+            return char.IsDigit(addedChar) ? addedChar : '\0';
+        };
 
         // === Create Auction Button ===
         var createButton = CreateCategoryButton("Create Auction", parent);
@@ -1040,6 +1113,16 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 }
             }
         });
+    }
+    
+    private Sprite CreateRoundedSprite()
+    {
+        var texture = new Texture2D(32, 32, TextureFormat.ARGB32, false);
+        var pixels = new Color[32 * 32];
+        for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+        texture.SetPixels(pixels);
+        texture.Apply();
+        return Sprite.Create(texture, new Rect(0, 0, 32, 32), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
     }
 
     // Helper method to create UI text component
@@ -1127,7 +1210,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         layoutContent.childControlWidth = true;
         layoutContent.childForceExpandHeight = false;
         layoutContent.childAlignment = TextAnchor.UpperCenter;
-        layoutContent.padding = new RectOffset(0, 14, 0, 0);
+        layoutContent.padding = new RectOffset(5, 15 + 10, 0, 0);
         layoutContent.spacing = 2f;
 
         // Automatically fit height based on children
@@ -1147,7 +1230,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         sbRect.pivot = new Vector2(1f, 0.5f);
         sbRect.anchoredPosition = Vector2.zero;
         sbRect.sizeDelta = new Vector2(20f, 0f);
-        sbRect.offsetMin = new Vector2(-20f, 10f);
+        sbRect.offsetMin = new Vector2(-21f, 10f);
         sbRect.offsetMax = new Vector2(0f, 0f);
 
         scrollbarGo.GetComponent<Image>().color = _leftRightPanelBackgroundColor;
@@ -1174,10 +1257,15 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         // Connect scrollbar to scrollRect
         scrollRect.verticalScrollbar = scrollbar;
-        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
         scrollRect.scrollSensitivity = 50f;
         _listingScrollRect = scrollRect;
         _listingScrollRect.onValueChanged.AddListener(OnScrollValueChanged);
+        
+        var scrollbarLayout = scrollbarGo.AddComponent<LayoutElement>();
+        scrollbarLayout.minWidth = 20f;
+        scrollbarLayout.preferredWidth = 20f;
+        scrollbarLayout.flexibleWidth = 0f;
     }
 
     private void CreateAuctionHouseUIConfirmationDialogue(Transform parent)
@@ -1362,7 +1450,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         rect.sizeDelta = new Vector2(0f, 50f);
 
         var image = rowGo.GetComponent<Image>();
-        image.color = new Color(1f, 1f, 1f, 1f); // Normal
+        image.color = new Color(1, 1, 1, 1);
 
         var layoutElement = rowGo.AddComponent<LayoutElement>();
         layoutElement.minHeight = 50f;
@@ -2298,6 +2386,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         _activeListingCoroutine = StartCoroutine(GetListingsByCategoryAsync(_currentCategory, _loadedPage, _listingsPerPage, listings =>
         {
+            _listingPanelRoot.SetActive(false);
+            
             if (_loadedPage == 0)
                 CreateListingHeaderRow(_listingPanelRoot.transform); // Only on first load
 
@@ -2306,6 +2396,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
             _loadedPage++;
             _isLoadingPage = false;
+            
+            _listingPanelRoot.SetActive(true);
         }));
     }
 
@@ -2456,9 +2548,28 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         return IsAuctionHouseWindowOpen() && _currentTab == "SellTab";
     }
     
-    public bool IsAuctionHouseAuctionsWindowOpen()
+    private Texture2D MakeDiamondGradientTexture(Color topColor)
     {
-        return IsAuctionHouseWindowOpen() && _currentTab == "SellTab";
+        var size = 32;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        
+        var highlight = new Color(0.5f, 0.5f, 0.5f, 1f);
+
+        for (var y = 0; y < size; y++)
+        {
+            var rawT = Mathf.Pow((size - 1 - y) / (float)(size - 1), 5.5f);
+            var t = Mathf.Clamp(rawT, 0.7f, 1f);
+            var c = Color.Lerp(highlight, topColor, t); // ← dark to light
+
+            for (var x = 0; x < size; x++)
+            {
+                tex.SetPixel(x, y, c);
+            }
+        }
+
+        tex.Apply();
+        return tex;
     }
     
     public bool HandleAuctionHouseWindowClosing(AuctionHouseUI instance, bool force = false)
