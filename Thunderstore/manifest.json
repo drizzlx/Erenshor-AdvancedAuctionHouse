@@ -1,0 +1,7 @@
+﻿{
+  "name": "ErenshorAdvancedAuctionHouse",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/drizzlx/Erenshor-AdvancedAuctionHouse",
+  "description": "Provides an advanced Auction House UI for buying and selling.",
+  "dependencies": [ "BepInEx-BepInExPack-5.4.2100" ]
+}

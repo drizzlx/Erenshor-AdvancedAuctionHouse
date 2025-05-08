@@ -43,8 +43,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private readonly string _druidClassName = "Druid";
     private readonly string _paladinClassName = "Paladin";
     
-    private bool _defaultLoaded = false;
-    
     private string _assetDirectory;
     private Button _showAllButton;
     private ScrollRect _listingScrollRect;
@@ -65,11 +63,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     // Lazy loading
     private int _loadedPage = 0;
     private bool _isLoadingPage = false;
-    private const float _scrollThreshold = 0.25f; // near bottom
+    private const float ScrollThreshold = 0.25f; // near bottom
     
     private Button _buyButton;
-    private Color _buyButtonEnabledTextColor = new Color(0.8f, 0.75f, 0.3f, 1f);
-    private Color _buyButtonDisabledTextColor = new Color(0.5f, 0.5f, 0.5f, 0.75f);
+    private readonly Color _buyButtonEnabledTextColor = new Color(0.8f, 0.75f, 0.3f, 1f);
+    private readonly Color _buyButtonDisabledTextColor = new Color(0.5f, 0.5f, 0.5f, 0.75f);
     private GameObject _confirmPanel;
     private GameObject _iconGo;
     private Button _yesButton;
@@ -77,7 +75,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     private Image _sellIconImage;
     private ItemIcon _sellIconItemIcon;
-    private string _currentTab;
+    public string currentTab;
+    public InputField BuyoutPriceInputField;
 
     private Text _buyPromptText;
     private Coroutine _activeListingCoroutine;
@@ -110,32 +109,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         _harmony.PatchAll();
     }
-    
-    private Texture2D LoadImageTexture(string assetPath)
-    {
-        if (!Directory.Exists(_assetDirectory))
-        {
-            Logger.LogError("Plugin directory not found " + _assetDirectory);
-
-            return null;
-        }
-        
-        if (!File.Exists(assetPath))
-        {
-            Logger.LogError("Texture not found " + assetPath);
-
-            return null;
-        }
-        
-        var data = File.ReadAllBytes(assetPath);
-        
-        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-
-        if (!texture.LoadImage(data))
-            Logger.LogError("Failed to load texture from " + assetPath);
-
-        return texture;
-    }
 
     private void OnDestroy()
     {
@@ -147,11 +120,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     private void OnScrollValueChanged(Vector2 scrollPos)
     {
-        if (_currentTab != "BrowseTab")
+        if (currentTab != "BrowseTab")
             return;
         
         // Vertical scroll: 1 = top, 0 = bottom
-        if (scrollPos.y <= _scrollThreshold)
+        if (scrollPos.y <= ScrollThreshold)
         {
             LoadNextPage();
         }
@@ -170,32 +143,62 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         {
             newListing = _selectedAuctionHouseNewListing;
 
-            // Remove existing item from sell window
             if (newListing.Item.GetInstanceID() == clickedItem.GetInstanceID())
             {
                 _selectedAuctionHouseNewListing = null;
-                
-                // Clear the image
+
+                // Clear UI image
                 if (_sellIconImage == null)
                     _sellIconImage = _iconGo.GetComponent<Image>();
 
                 _sellIconImage.sprite = null;
                 _sellIconImage.color = Color.clear;
-                _sellIconImage.enabled = true; // ensure it's active in case it's been disabled
-                
-                _sellIconItemIcon.MyItem = GameData.PlayerInv.Empty;
-                _sellIconItemIcon.Quantity = 0;
-                _sellIconItemIcon.ForceInitInv();
-                
+                _sellIconImage.enabled = true;
+
+                // DESTROY old icon GameObject
+                if (_sellIconItemIcon != null)
+                {
+                    GameObject.Destroy(_sellIconItemIcon.gameObject);
+                    _sellIconItemIcon = null;
+                }
+
+                if (!GameData.PlayerInv.AddItemToInv(newListing.Item))
+                    GameData.PlayerInv.ForceItemToInv(newListing.Item);
                 return;
             }
+
+            // Still destroy if we're replacing it
+            if (_sellIconItemIcon != null)
+            {
+                GameObject.Destroy(_sellIconItemIcon.gameObject);
+                _sellIconItemIcon = null;
+            }
+
+            if (!GameData.PlayerInv.AddItemToInv(newListing.Item))
+                GameData.PlayerInv.ForceItemToInv(newListing.Item);
         }
+
         
+        // Clone and assign a valid parent before Awake triggers logic
+        var clonedIconGo = GameObject.Instantiate(itemIcon.gameObject, _iconGo.transform.parent, false);
+
+        // Optionally rename for clarity
+        clonedIconGo.name = "ClonedSellItemIcon";
+
+        // Retrieve the component reference
+        var clonedIcon = clonedIconGo.GetComponent<ItemIcon>();
+
+        // Now you can assign it safely
+        clonedIcon.MyItem = GameObject.Instantiate(clickedItem); // If you also need to clone the item
+        clonedIcon.Quantity = itemIcon.Quantity;
+        clonedIcon.VendorSlot = true;
+
+        // Assign to listing
         newListing = new AuctionHouseNewListing
         {
-            Item = clickedItem,
-            ItemIcon = _sellIconItemIcon,
-            ItemIconSprite = clickedItem.ItemIcon,
+            Item = clonedIcon.MyItem,
+            ItemIcon = clonedIcon,
+            ItemIconSprite = clonedIcon.MyItem.ItemIcon,
             Quantity = 1,
             SellerName = GameData.PlayerStats.MyName,
             Price = 1
@@ -208,10 +211,10 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         _sellIconImage.color = Color.white;
         _sellIconImage.preserveAspect = true;
         
-        _sellIconItemIcon.MyItem = newListing.Item;
-        _sellIconItemIcon.Quantity = 1;
-        _sellIconItemIcon.VendorSlot = true;
+        _sellIconItemIcon = clonedIcon;
         _sellIconItemIcon.ForceInitInv();
+        
+        GameData.PlayerInv.RemoveItemFromInv(itemIcon);
     }
     
     private void DestroyUI()
@@ -289,13 +292,12 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         // Reset class + tab state
         _selectedClass = null;
         _selectedClassName = null;
-        _currentTab = null;
+        currentTab = null;
 
         // Clear any lingering input field text
-        var inputField = GameObject.Find("BuyoutPriceInput")?.GetComponent<InputField>();
-        if (inputField != null)
+        if (BuyoutPriceInputField != null)
         {
-            inputField.text = string.Empty;
+            BuyoutPriceInputField.text = string.Empty;
         }
 
         // Reset page state
@@ -305,6 +307,14 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     public void CloseAuctionHouseUI()
     {
+        if (_selectedAuctionHouseNewListing != null)
+        {
+            if (!GameData.PlayerInv.AddItemToInv(_selectedAuctionHouseNewListing.Item))
+                GameData.PlayerInv.ForceItemToInv(_selectedAuctionHouseNewListing.Item);
+                
+            UpdateSocialLog.LogAdd("Item in sell slot was returned to inventory.", "green");
+        }
+        
         // Cancel running coroutines
         if (_activeListingCoroutine != null)
         {
@@ -322,32 +332,29 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         DestroyUI();
 
         _selectedAuctionHouseListing = null;
-        _defaultLoaded = false;
-        _currentTab = null;
+        currentTab = null;
     }
 
     public void OpenAuctionHouseUI(string tab = "BrowseTab")
     {
-        if (IsAuctionHouseWindowOpen()) 
+        // Disable core auction house window
+        GameData.AHUI.AHWindow.SetActive(false);
+        GameData.AuctionWindowOpen = false;
+        GameData.PlayerAuctionItemsOpen = false;
+
+        if (IsAuctionHouseWindowOpen())
+        {
             CloseAuctionHouseUI();
+        }
         
-        _currentTab = tab;
+        currentTab = tab;
         
         if (auctionHouseUIRoot == null)
-            CreateAuctionHouseUI(tab);
+            CreateAuctionHouseUI();
 
         if (auctionHouseUIRoot != null)
         {
-            GameData.PlayerAuctionItemsOpen = false;
-            
-            // Disable core functionality
-            GameData.AHUI.AHWindow.SetActive(false);
-            GameData.AuctionWindowOpen = false;
-            
             auctionHouseUIRoot.SetActive(true);
-
-            if (_defaultLoaded)
-                return;
             
             if (tab == "BrowseTab")
             {
@@ -359,8 +366,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 // Optionally force its visual color to selected
                 var image = _showAllButton.GetComponent<Image>();
                 image.color = Color.white;
-
-                _defaultLoaded = true;
             }
             else if (tab == "SellTab")
             {
@@ -380,7 +385,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         }
     }
 
-    private void CreateAuctionHouseUI(string tab)
+    private void CreateAuctionHouseUI()
     {
         // === Canvas ===
         var canvasGo = new GameObject("AuctionHouseUICanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -402,13 +407,13 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         var footerGo = CreateAuctionHouseUIFooter(panelGo.transform);
         
-        CreateAuctionHouseUIFooterButtons(footerGo.transform, tab);
+        CreateAuctionHouseUIFooterButtons(footerGo.transform);
         CreateAuctionHouseUIFooterTabs(footerGo.transform);
         
         var leftPanelGo = CreateAuctionHouseUILeftPanel(panelGo.transform);
         
-        CreateAuctionHouseUILeftPanelButtons(leftPanelGo.transform, tab);
-        CreateAuctionHouseUIRightPanel(panelGo.transform, tab);
+        CreateAuctionHouseUILeftPanelButtons(leftPanelGo.transform);
+        CreateAuctionHouseUIRightPanel(panelGo.transform);
         CreateAuctionHouseUIConfirmationDialogue(auctionHouseUIRoot.transform);
         
         // === Drag Handle (diamond style) ===
@@ -535,9 +540,9 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         return footerGo;
     }
 
-    private void CreateAuctionHouseUIFooterButtons(Transform parent, string tab)
+    private void CreateAuctionHouseUIFooterButtons(Transform parent)
     {
-        if (tab == "BrowseTab")
+        if (currentTab == "BrowseTab")
         {
             // === Buy Button ===
             var buyButtonGo = new GameObject("FooterBuyButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Button));
@@ -611,7 +616,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
             txt.color = Color.white;
             txt.fontSize = 18;
         }
-        else if (tab == "SellTab")
+        else if (currentTab == "SellTab")
         {
             // === Cancel Auction ===
             var buyButtonGo = new GameObject("FooterBuyButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Button));
@@ -659,8 +664,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
             button.onClick.AddListener(() =>
             {
                 BuyItem();
-                
-                UpdateSocialLog.LogAdd("Auction item cancelled and returned to inventory.", "green");
             });
 
             
@@ -764,13 +767,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         CreateAuctionHouseUIFooterTabsButton("BrowseTab", "Buy", tabContainerGo.transform, _headerHeight, () =>
         {
-            CloseAuctionHouseUI();
             OpenAuctionHouseUI("BrowseTab");
         });
         
         CreateAuctionHouseUIFooterTabsButton("SellTab", "Sell", tabContainerGo.transform, _headerHeight, () =>
         {
-            CloseAuctionHouseUI();
             OpenAuctionHouseUI("SellTab");
             GameData.AHUI.CurrentSellerData = AuctionHouse.ReadCharData(GameData.PlayerStats.MyName);
                 
@@ -877,7 +878,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         layoutGroup.childForceExpandWidth = true;   // Stretch width
         layoutGroup.childForceExpandHeight = false; // Don't force height (unless you want equal height buttons)
         layoutGroup.childAlignment = TextAnchor.UpperCenter;
-        layoutGroup.spacing = _currentTab == "SellTab" ? 10f : 3f; // space between buttons
+        layoutGroup.spacing = currentTab == "SellTab" ? 10f : 3f; // space between buttons
         layoutGroup.padding = new RectOffset(0, 0, 10, 10); // ← left, right, top, bottom
         
         var fitterLeft = leftPanelGo.AddComponent<ContentSizeFitter>();
@@ -887,16 +888,16 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         return leftPanelGo;
     }
 
-    private void CreateAuctionHouseUILeftPanelButtons(Transform parent, string tab)
+    private void CreateAuctionHouseUILeftPanelButtons(Transform parent)
     {
-        if (tab == "BrowseTab")
+        if (currentTab == "BrowseTab")
         {
             CreateAuctionHouseUILeftPanelButtonsBrowseTab(parent);
 
             return;
         }
 
-        if (tab == "SellTab")
+        if (currentTab == "SellTab")
         {
             CreateAuctionHouseUILeftPanelButtonsSellTab(parent);
         }
@@ -987,8 +988,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         iconContainer.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f); // fully transparent container
 
         // === Placeholder Icon ===
-        var iconGo = new GameObject("SellItemIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(ItemIcon));
+        var iconGo = new GameObject("SellItemIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         iconGo.transform.SetParent(iconContainer.transform, false);
+        
+        // Delay adding ItemIcon until after parent is set, to avoid Awake errors.
+        iconGo.AddComponent<ItemIcon>();
         
         _iconGo = iconGo;
 
@@ -1062,16 +1066,16 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         outline.effectDistance = new Vector2(1f, -1f);
 
 
-        var inputField = inputFieldGo.GetComponent<InputField>();
+        BuyoutPriceInputField = inputFieldGo.GetComponent<InputField>();
         
-        inputField.textComponent = CreateUIText(inputFieldGo.transform, "", 16, TextAnchor.MiddleCenter);
-        inputField.textComponent.color = _buyButtonEnabledTextColor;
+        BuyoutPriceInputField.textComponent = CreateUIText(inputFieldGo.transform, "", 16, TextAnchor.MiddleCenter);
+        BuyoutPriceInputField.textComponent.color = _buyButtonEnabledTextColor;
         
-        inputField.placeholder = CreateUIText(inputFieldGo.transform, "Gold", 16, TextAnchor.MiddleCenter);
-        inputField.placeholder.color = _buyButtonDisabledTextColor;
+        BuyoutPriceInputField.placeholder = CreateUIText(inputFieldGo.transform, "Gold", 16, TextAnchor.MiddleCenter);
+        BuyoutPriceInputField.placeholder.color = _buyButtonDisabledTextColor;
         
-        inputField.contentType = InputField.ContentType.Custom;
-        inputField.onValidateInput += (string text, int charIndex, char addedChar) =>
+        BuyoutPriceInputField.contentType = InputField.ContentType.Custom;
+        BuyoutPriceInputField.onValidateInput += (string text, int charIndex, char addedChar) =>
         {
             return char.IsDigit(addedChar) ? addedChar : '\0';
         };
@@ -1083,13 +1087,21 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
             if (_selectedAuctionHouseNewListing != null)
             {
                 GameData.SlotToBeListed = _selectedAuctionHouseNewListing.ItemIcon;
-                GameData.AHUI.ListPrice.text = inputField.text;
+                GameData.AHUI.ListPrice.text = BuyoutPriceInputField.text;
+
+                if (BuyoutPriceInputField.text == "0")
+                {
+                    UpdateSocialLog.LogAdd("Price must be greater than 0.", "red");
+
+                    return;
+                }
+                
                 GameData.AHUI.CommitItem();
 
                 if (string.IsNullOrEmpty(GameData.AHUI.Error.text))
                 {
                     _selectedAuctionHouseNewListing = null;
-                    inputField.text = "";
+                    BuyoutPriceInputField.text = "";
                     
                     // Clear the image
                     if (_sellIconImage == null)
@@ -1103,7 +1115,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                     _sellIconItemIcon.Quantity = 0;
                     _sellIconItemIcon.ForceInitInv();
                     
-                    CloseAuctionHouseUI();
                     OpenAuctionHouseUI("SellTab");
                     GameData.AHUI.CurrentSellerData = AuctionHouse.ReadCharData(GameData.PlayerStats.MyName);
                 }
@@ -1146,7 +1157,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         return txt;
     }
 
-    private void CreateAuctionHouseUIRightPanel(Transform parent, string tab)
+    private void CreateAuctionHouseUIRightPanel(Transform parent)
     {
         var rightPanelGo = new GameObject("AuctionHouseUIRightPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(ScrollRect));
         rightPanelGo.transform.SetParent(parent, false);
@@ -1483,8 +1494,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         spacerElement.preferredWidth = 10f; // tweak spacing as needed
         spacerElement.flexibleWidth = 0f;
 
-        var iconGo = new GameObject("ItemIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(ItemIcon));
-        iconGo.transform.SetParent(iconContainer.transform, false); // << Important: parent is the container
+        var iconGo = new GameObject("ItemIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        iconGo.transform.SetParent(iconContainer.transform, false);
 
         var iconRect = iconGo.GetComponent<RectTransform>();
         iconRect.anchorMin = new Vector2(0f, 0f);
@@ -1496,8 +1507,9 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         iconImage.sprite = listing.Item.ItemIcon;
         iconImage.color = Color.white;
         iconImage.preserveAspect = true;
-
-        var itemIcon = iconGo.GetComponent<ItemIcon>();
+        
+        // Delay adding ItemIcon until after parent is set, to avoid Awake errors.
+        var itemIcon = iconGo.AddComponent<ItemIcon>();
         itemIcon.MyItem = listing.Item;
         itemIcon.Quantity = listing.Quantity;
         itemIcon.VendorSlot = true;
@@ -1526,7 +1538,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         button.onClick.AddListener(() =>
         {
-            if (_currentTab == "BrowseTab")
+            if (currentTab == "BrowseTab")
             {
                 GameData.AHUI.CurrentSellerData = listing.SellerData;
                 GameData.PlayerAud.PlayOneShot(GameData.Misc.Click, GameData.SFXVol);
@@ -1539,7 +1551,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
                 SetButtonInteractable(_buyButton, true, _buyButtonEnabledTextColor, _buyButtonDisabledTextColor);
             }
-            else if (_currentTab == "SellTab")
+            else if (currentTab == "SellTab")
             {
                 GameData.AHUI.CurrentSellerData = listing.SellerData;
                 GameData.SlotActiveForAuction = listing.ItemIcon;
@@ -2067,10 +2079,14 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
     private void BuyItem()
     {
+        var playerGoldBeforeTransaction = GameData.PlayerInv.Gold;
+        
         GameData.AHUI.BuyItem();
 
         // === Remove the listing row from UI ===
-        if (_selectedAuctionHouseListing != null && _selectedAuctionHouseListing.ItemIcon != null)
+        if (_selectedAuctionHouseListing != null 
+            && _selectedAuctionHouseListing.ItemIcon != null 
+            && (currentTab == "SellTab" || currentTab == "BrowseTab" && GameData.PlayerInv.Gold < playerGoldBeforeTransaction))
         {
             var row = _selectedAuctionHouseListing.ItemIcon.transform;
 
@@ -2091,6 +2107,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
             _selectedAuctionHouseListing = null;
             SetButtonInteractable(_buyButton, false, _buyButtonEnabledTextColor, _buyButtonDisabledTextColor);
+            
+            if (currentTab == "BrowseTab")
+                UpdateSocialLog.LogAdd("Auction item purchased and added to inventory.", "green");
+            else if (currentTab == "SellTab")
+                UpdateSocialLog.LogAdd("Auction item cancelled and returned to inventory.", "green");
         }
     }
     
@@ -2527,11 +2548,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         yield return GetAuctionHouseDataAsync(slotTypes, weaponTypes, page, perPage, onComplete);
     }
     
-    public float GetScrollThreshold() => _scrollThreshold;
+    public float GetScrollThreshold() => ScrollThreshold;
 
     public void TriggerManualPagination()
     {
-        if (!_isLoadingPage && _currentTab == "BrowseTab")
+        if (!_isLoadingPage && currentTab == "BrowseTab")
             LoadNextPage();
     }
 
@@ -2545,7 +2566,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     public bool IsAuctionHouseSellWindowOpen()
     {
-        return IsAuctionHouseWindowOpen() && _currentTab == "SellTab";
+        return IsAuctionHouseWindowOpen() && currentTab == "SellTab";
     }
     
     private Texture2D MakeDiamondGradientTexture(Color topColor)
