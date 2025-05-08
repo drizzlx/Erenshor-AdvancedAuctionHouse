@@ -2152,6 +2152,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         txt.alignment = TextAnchor.MiddleLeft;
         txt.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
         txt.color = Color.white;
+        txt.fontSize = 18;
 
         var rect = textGo.GetComponent<RectTransform>();
         rect.anchorMin = Vector2.zero;
@@ -2213,6 +2214,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         txt.alignment = TextAnchor.MiddleCenter;
         txt.color = _buyButtonEnabledTextColor;
         txt.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        txt.fontSize = 18;
 
         return button;
     }
@@ -2255,6 +2257,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         textRect.offsetMax = Vector2.zero;
         txt.color = Color.white;
         txt.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        txt.fontSize = 16;
 
         return button;
     }
@@ -2297,6 +2300,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         textRect.offsetMax = Vector2.zero;
         txt.color = Color.white;
         txt.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        txt.fontSize = 16;
 
         return button;
     }
