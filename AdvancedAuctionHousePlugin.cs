@@ -162,8 +162,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                     _sellIconItemIcon = null;
                 }
 
+                BuyoutPriceInputField.text = "";
+
                 if (!GameData.PlayerInv.AddItemToInv(newListing.Item))
                     GameData.PlayerInv.ForceItemToInv(newListing.Item);
+                
                 return;
             }
 
@@ -210,6 +213,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         _sellIconImage.sprite = newListing.ItemIconSprite;
         _sellIconImage.color = Color.white;
         _sellIconImage.preserveAspect = true;
+        
+        BuyoutPriceInputField.text = ((newListing.Item.ItemValue * 6) - 1).ToString();
         
         _sellIconItemIcon = clonedIcon;
         _sellIconItemIcon.ForceInitInv();

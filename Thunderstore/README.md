@@ -7,5 +7,7 @@ Provides an advanced Auction House UI for buying and selling.
 - Extract the mod into *Erenshor\BepInEx\plugins* folder
 
 ## Patch Notes
+1.0.2
+- Auto set the sell price text input to max value (ItemValue * 6 - 1)
 1.0.1
 - Increased font sizes
