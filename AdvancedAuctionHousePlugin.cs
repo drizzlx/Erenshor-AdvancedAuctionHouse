@@ -136,6 +136,14 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         if (clickedItem == null || clickedItem.ItemIcon == null)
             return;
+
+        // Is this a blessed item? They have quantity > 1.
+        if (clickedItem.RequiredSlot != Item.SlotType.General && itemIcon.Quantity > 1)
+        {
+            UpdateSocialLog.LogAdd("Blessed items are not supported in the Auction House.", "red");
+
+            return;
+        }
         
         AuctionHouseNewListing newListing;
 
@@ -309,8 +317,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         _loadedPage = 0;
         _isLoadingPage = false;
     }
-    
-    public void CloseAuctionHouseUI()
+
+    private void ReturnNewListingItemToInventory()
     {
         if (_selectedAuctionHouseNewListing != null)
         {
@@ -319,6 +327,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 
             UpdateSocialLog.LogAdd("Item in sell slot was returned to inventory.", "green");
         }
+    }
+    
+    public void CloseAuctionHouseUI()
+    {
+        ReturnNewListingItemToInventory();
         
         // Cancel running coroutines
         if (_activeListingCoroutine != null)

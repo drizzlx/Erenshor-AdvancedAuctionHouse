@@ -7,7 +7,11 @@ Provides an advanced Auction House UI for buying and selling.
 - Extract the mod into *Erenshor\BepInEx\plugins* folder
 
 ## Patch Notes
+1.0.3
+- Prevent Blessed items from being added to the seller window (AH doesn't support them).
+
 1.0.2
 - Auto set the sell price text input to max value (ItemValue * 6 - 1)
+
 1.0.1
 - Increased font sizes
