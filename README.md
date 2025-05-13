@@ -7,6 +7,9 @@ Provides an advanced Auction House UI for buying and selling.
 - Extract the mod into *Erenshor\BepInEx\plugins* folder
 
 ## Patch Notes
+1.0.4
+- Fixed a UI bug allowing items in the sell listing to be duped.
+
 1.0.3
 - Prevent Blessed items from being added to the seller window (AH doesn't support them).
 

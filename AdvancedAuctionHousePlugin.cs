@@ -137,6 +137,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         if (clickedItem == null || clickedItem.ItemIcon == null)
             return;
 
+        if (_selectedAuctionHouseNewListing == null && itemIcon.VendorSlot)
+        {
+            return;
+        }
+
         // Is this a blessed item? They have quantity > 1.
         if (clickedItem.RequiredSlot != Item.SlotType.General && itemIcon.Quantity > 1)
         {
@@ -176,6 +181,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                     GameData.PlayerInv.ForceItemToInv(newListing.Item);
                 
                 return;
+            }
+            
+            if (itemIcon.VendorSlot)
+            {
+                return; // prevent picking up an ItemIcon from the sell listing.
             }
 
             // Still destroy if we're replacing it
