@@ -28,13 +28,10 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     public static Vector2 SavedAuctionHouseSize = Vector2.zero;
     public static Vector2 SavedAuctionHousePosition = Vector2.zero;
-    private Transform _panelGoTransform;
     
     private readonly float _auctionHouseUIWidth = 1000f;
     private readonly float _auctionHouseUIHeight = 500f;
     private readonly float _leftPanelWidthOfParent = 0.25f;
-    
-    private readonly int _pageCount = 9999;
     
     private string _selectedClassName;
     private Class _selectedClass;
@@ -42,6 +39,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private readonly string _duelistClassName = "Duelist";
     private readonly string _druidClassName = "Druid";
     private readonly string _paladinClassName = "Paladin";
+    private readonly string _stormcallerClassName = "Stormcaller";
     
     private string _assetDirectory;
     private Button _showAllButton;
@@ -53,7 +51,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private readonly Color _buyPromptBorderColor = new Color(0.45f, 0.34f, 0.14f, 0.8f);
     private readonly Color _closeButtonColor = new Color(0.235f, 0.2f, 0.165f, 1f);
     
-    private int _currentPage = 0;
     private const int _listingsPerPage = 30;
     private string _currentCategory = "Default";
     
@@ -451,8 +448,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         var handleRect = dragHandle.GetComponent<RectTransform>();
         handleRect.sizeDelta = new Vector2(14, 14);
-        handleRect.anchorMin = new Vector2(1f, 1f);
-        handleRect.anchorMax = new Vector2(1f, 1f);
+        handleRect.anchorMin = new Vector2(0f, 0f);
+        handleRect.anchorMax = new Vector2(0f, 0f);
         handleRect.pivot = new Vector2(0.5f, 0.5f);
         handleRect.anchoredPosition = new Vector2(0f, 0f);
 
@@ -469,10 +466,8 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         // Drag logic setup
         var handleDrag = dragHandle.GetComponent<DragUI>();
-        handleDrag.Parent = panelGo.transform;
+        handleDrag.Parent = panelGo.GetComponent<RectTransform>();
         handleDrag.isInv = false;
-
-        _panelGoTransform = handleDrag.Parent;
         
         panelGo.SetActive(true);
     }
@@ -505,7 +500,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         }
         else
         {
-            rect.anchoredPosition = new Vector2(-_auctionHouseUIWidth / 2f, -_auctionHouseUIHeight / 2f);
+            rect.anchoredPosition = Vector2.zero;
         }
         
         _headerHeight = rect.sizeDelta.y * 0.1f;
@@ -1661,10 +1656,22 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 CleanupAuctionHouse(1);
                 
                 _selectedClassName = _paladinClassName;
-                _selectedClass = GameData.ClassDB.Warrior;
+                _selectedClass = GameData.ClassDB.Paladin;
 
                 ShowItemsByCategory("Weapon");
                 ToggleWeaponsTypeSubPanel(paladin.transform.parent);
+            });
+            
+            var stormcaller = CreateClassSubCategoryButton(_stormcallerClassName, _weaponsClassSubPanel.transform);
+            stormcaller.onClick.AddListener(() =>
+            {
+                CleanupAuctionHouse(1);
+                
+                _selectedClassName = _stormcallerClassName;
+                _selectedClass = GameData.ClassDB.Stormcaller;
+
+                ShowItemsByCategory("Weapon");
+                ToggleWeaponsTypeSubPanel(stormcaller.transform.parent);
             });
 
             // Insert below Weapons button
@@ -1839,10 +1846,22 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 CleanupAuctionHouse(1);
                 
                 _selectedClassName = _paladinClassName;
-                _selectedClass = GameData.ClassDB.Warrior;
+                _selectedClass = GameData.ClassDB.Paladin;
                 
                 ShowItemsByCategory("Armor");
                 ToggleArmorTypeSubPanel(paladin.transform.parent);
+            });
+            
+            var stormcaller = CreateClassSubCategoryButton(_stormcallerClassName, _armorClassSubPanel.transform);
+            stormcaller.onClick.AddListener(() =>
+            {
+                CleanupAuctionHouse(1);
+                
+                _selectedClassName = _stormcallerClassName;
+                _selectedClass = GameData.ClassDB.Stormcaller;
+
+                ShowItemsByCategory("Armor");
+                ToggleWeaponsTypeSubPanel(stormcaller.transform.parent);
             });
             
             int index = -1;
