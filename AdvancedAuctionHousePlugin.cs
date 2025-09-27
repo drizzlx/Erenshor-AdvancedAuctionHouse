@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using BepInEx;
-using ErenBot.UI;
+using AdvancedAuctionHouse.Manager;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -424,7 +424,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         var scaler = canvasGo.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.referenceResolution = new Vector2(Screen.width, Screen.height);
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 0.5f;
         
@@ -450,34 +450,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         CreateAuctionHouseUIRightPanel(panelGo.transform);
         CreateAuctionHouseUIConfirmationDialogue(AuctionHouseUIRoot.transform);
         
-        // === Drag Handle (diamond style) ===
-        var dragHandle = new GameObject("AuctionHouseDragHandle", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(DragUI));
-        dragHandle.name = "AuctionHouseDiamondDragHandle";
-        dragHandle.transform.SetParent(panelGo.transform, false);
-
-        var handleRect = dragHandle.GetComponent<RectTransform>();
-        handleRect.sizeDelta = new Vector2(14, 14);
-        handleRect.anchorMin = new Vector2(0f, 0f);
-        handleRect.anchorMax = new Vector2(0f, 0f);
-        handleRect.pivot = new Vector2(0.5f, 0.5f);
-        handleRect.anchoredPosition = new Vector2(0f, 0f);
-
-        var handleImage = dragHandle.GetComponent<Image>();
-        handleImage.sprite = Sprite.Create(
-            MakeDiamondGradientTexture(new Color(0.0667f, 0.5333f, 0.7529f, 0.9f)),
-            new Rect(0, 0, 2, 2),
-            new Vector2(0.5f, 0.5f)
-        );
-        handleImage.type = Image.Type.Simple;
-        handleImage.raycastTarget = true;
-
-        dragHandle.transform.localRotation = Quaternion.Euler(0, 0, 45f);
-
-        // Drag logic setup
-        var handleDrag = dragHandle.GetComponent<DragUI>();
-        handleDrag.Parent = panelGo.GetComponent<RectTransform>();
-        handleDrag.isInv = false;
-        
         panelGo.SetActive(true);
     }
 
@@ -489,8 +461,6 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         AuctionHouseUIRoot = panelGo;
         
         var rect = panelGo.GetComponent<RectTransform>();
-        
-        rect.localScale = new Vector3(0.9f, 0.9f, 1f); // 90% of current size
         
         if (SavedAuctionHouseSize != Vector2.zero)
         {
