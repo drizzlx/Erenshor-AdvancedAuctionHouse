@@ -10,8 +10,8 @@ namespace AdvancedAuctionHouse.patch
         static bool Prefix(Hotkeys __instance)
         {
             if (AdvancedAuctionHousePlugin.Instance != null &&
-                AdvancedAuctionHousePlugin.Instance.BuyoutPriceInputField != null 
-                && AdvancedAuctionHousePlugin.Instance.BuyoutPriceInputField.isFocused)
+                AdvancedAuctionHousePlugin.Instance.buyoutPriceInputField != null 
+                && AdvancedAuctionHousePlugin.Instance.buyoutPriceInputField.isFocused)
             {
                 return false;
             }

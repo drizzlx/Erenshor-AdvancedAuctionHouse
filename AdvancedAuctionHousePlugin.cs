@@ -5,9 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using BepInEx;
+using ErenBot.UI;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace AdvancedAuctionHouse;
@@ -19,7 +21,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     private Harmony _harmony;
     
-    public GameObject auctionHouseUIRoot;
+    public static GameObject AuctionHouseUIRoot;
     private GameObject _listingPanelRoot;
     private GameObject _weaponsClassSubPanel;
     private GameObject _weaponsTypeSubPanel;
@@ -29,9 +31,10 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     public static Vector2 SavedAuctionHouseSize = Vector2.zero;
     public static Vector2 SavedAuctionHousePosition = Vector2.zero;
     
-    private readonly float _auctionHouseUIWidth = 1000f;
-    private readonly float _auctionHouseUIHeight = 500f;
     private readonly float _leftPanelWidthOfParent = 0.25f;
+    public static float GetResponsiveWidth() => Screen.width * 0.34f;
+    public static float GetResponsiveHeight() => Screen.height * 0.3f;
+    private static Vector2 _lastScreenSize = Vector2.zero;
     
     private string _selectedClassName;
     private Class _selectedClass;
@@ -51,7 +54,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private readonly Color _buyPromptBorderColor = new Color(0.45f, 0.34f, 0.14f, 0.8f);
     private readonly Color _closeButtonColor = new Color(0.235f, 0.2f, 0.165f, 1f);
     
-    private const int _listingsPerPage = 30;
+    private const int ListingsPerPage = 30;
     private string _currentCategory = "Default";
     
     private readonly float _listingIconWidth = 40f;
@@ -73,7 +76,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     private Image _sellIconImage;
     private ItemIcon _sellIconItemIcon;
     public string currentTab;
-    public InputField BuyoutPriceInputField;
+    [FormerlySerializedAs("BuyoutPriceInputField")] public InputField buyoutPriceInputField;
 
     private Text _buyPromptText;
     private Coroutine _activeListingCoroutine;
@@ -172,7 +175,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                     _sellIconItemIcon = null;
                 }
 
-                BuyoutPriceInputField.text = "";
+                buyoutPriceInputField.text = "";
 
                 if (!GameData.PlayerInv.AddItemToInv(newListing.Item))
                     GameData.PlayerInv.ForceItemToInv(newListing.Item);
@@ -229,7 +232,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         _sellIconImage.color = Color.white;
         _sellIconImage.preserveAspect = true;
         
-        BuyoutPriceInputField.text = ((newListing.Item.ItemValue * 6) - 1).ToString();
+        buyoutPriceInputField.text = ((newListing.Item.ItemValue * 6) - 1).ToString();
         
         _sellIconItemIcon = clonedIcon;
         _sellIconItemIcon.ForceInitInv();
@@ -289,10 +292,10 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         }
 
         // Destroy root last
-        if (auctionHouseUIRoot != null)
+        if (AuctionHouseUIRoot != null)
         {
-            Destroy(auctionHouseUIRoot);
-            auctionHouseUIRoot = null;
+            Destroy(AuctionHouseUIRoot);
+            AuctionHouseUIRoot = null;
         }
         
         // Clear sell icon references
@@ -315,9 +318,9 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         currentTab = null;
 
         // Clear any lingering input field text
-        if (BuyoutPriceInputField != null)
+        if (buyoutPriceInputField != null)
         {
-            BuyoutPriceInputField.text = string.Empty;
+            buyoutPriceInputField.text = string.Empty;
         }
 
         // Reset page state
@@ -374,12 +377,12 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         currentTab = tab;
         
-        if (auctionHouseUIRoot == null)
+        if (AuctionHouseUIRoot == null)
             CreateAuctionHouseUI();
 
-        if (auctionHouseUIRoot != null)
+        if (AuctionHouseUIRoot != null)
         {
-            auctionHouseUIRoot.SetActive(true);
+            AuctionHouseUIRoot.SetActive(true);
             
             if (tab == "BrowseTab")
             {
@@ -419,6 +422,12 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         canvas.overrideSorting = true;
         canvas.sortingOrder = 0; // 0 for behind other UI elements
         
+        var scaler = canvasGo.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
+        
         var group = canvasGo.AddComponent<CanvasGroup>();
         group.blocksRaycasts = true;
         group.interactable = true;
@@ -439,7 +448,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         
         CreateAuctionHouseUILeftPanelButtons(leftPanelGo.transform);
         CreateAuctionHouseUIRightPanel(panelGo.transform);
-        CreateAuctionHouseUIConfirmationDialogue(auctionHouseUIRoot.transform);
+        CreateAuctionHouseUIConfirmationDialogue(AuctionHouseUIRoot.transform);
         
         // === Drag Handle (diamond style) ===
         var dragHandle = new GameObject("AuctionHouseDragHandle", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(DragUI));
@@ -477,9 +486,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         var panelGo = new GameObject("AuctionHouseUIPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
         panelGo.transform.SetParent(parent, false);
         
-        auctionHouseUIRoot = panelGo;
+        AuctionHouseUIRoot = panelGo;
         
         var rect = panelGo.GetComponent<RectTransform>();
+        
+        rect.localScale = new Vector3(0.9f, 0.9f, 1f); // 90% of current size
         
         if (SavedAuctionHouseSize != Vector2.zero)
         {
@@ -487,12 +498,12 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         }
         else
         {
-            rect.sizeDelta = new Vector2(_auctionHouseUIWidth, _auctionHouseUIHeight);
+            rect.sizeDelta = new Vector2(UIManager.MainUIWidth, UIManager.MainUIHeight);
         }
         
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
 
         if (SavedAuctionHousePosition != Vector2.zero)
         {
@@ -773,7 +784,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         tabContainerRect.anchorMin = new Vector2(0f, 0f);
         tabContainerRect.anchorMax = new Vector2(0f, 0f);
         tabContainerRect.pivot = new Vector2(0f, 1f);
-        tabContainerRect.anchoredPosition = new Vector2(((_auctionHouseUIWidth * _leftPanelWidthOfParent) / 2) - _buyoutButtonWidth - 20f, -_borderRect.offsetMax.y); // Hang down from footer
+        tabContainerRect.anchoredPosition = new Vector2(((UIManager.MainUIWidth * _leftPanelWidthOfParent) / 2) - _buyoutButtonWidth - 20f, -_borderRect.offsetMax.y); // Hang down from footer
         tabContainerRect.sizeDelta = new Vector2(_buyoutButtonWidth * 2, _headerHeight * 0.65f); // enough for two buttons side by side
         
         // Layout for spacing
@@ -1089,16 +1100,16 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         outline.effectDistance = new Vector2(1f, -1f);
 
 
-        BuyoutPriceInputField = inputFieldGo.GetComponent<InputField>();
+        buyoutPriceInputField = inputFieldGo.GetComponent<InputField>();
         
-        BuyoutPriceInputField.textComponent = CreateUIText(inputFieldGo.transform, "", 16, TextAnchor.MiddleCenter);
-        BuyoutPriceInputField.textComponent.color = _buyButtonEnabledTextColor;
+        buyoutPriceInputField.textComponent = CreateUIText(inputFieldGo.transform, "", 16, TextAnchor.MiddleCenter);
+        buyoutPriceInputField.textComponent.color = _buyButtonEnabledTextColor;
         
-        BuyoutPriceInputField.placeholder = CreateUIText(inputFieldGo.transform, "Gold", 16, TextAnchor.MiddleCenter);
-        BuyoutPriceInputField.placeholder.color = _buyButtonDisabledTextColor;
+        buyoutPriceInputField.placeholder = CreateUIText(inputFieldGo.transform, "Gold", 16, TextAnchor.MiddleCenter);
+        buyoutPriceInputField.placeholder.color = _buyButtonDisabledTextColor;
         
-        BuyoutPriceInputField.contentType = InputField.ContentType.Custom;
-        BuyoutPriceInputField.onValidateInput += (string text, int charIndex, char addedChar) =>
+        buyoutPriceInputField.contentType = InputField.ContentType.Custom;
+        buyoutPriceInputField.onValidateInput += (string text, int charIndex, char addedChar) =>
         {
             return char.IsDigit(addedChar) ? addedChar : '\0';
         };
@@ -1110,9 +1121,9 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
             if (_selectedAuctionHouseNewListing != null)
             {
                 GameData.SlotToBeListed = _selectedAuctionHouseNewListing.ItemIcon;
-                GameData.AHUI.ListPrice.text = BuyoutPriceInputField.text;
+                GameData.AHUI.ListPrice.text = buyoutPriceInputField.text;
 
-                if (BuyoutPriceInputField.text == "0")
+                if (buyoutPriceInputField.text == "0")
                 {
                     UpdateSocialLog.LogAdd("Price must be greater than 0.", "red");
 
@@ -1124,7 +1135,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 if (string.IsNullOrEmpty(GameData.AHUI.Error.text))
                 {
                     _selectedAuctionHouseNewListing = null;
-                    BuyoutPriceInputField.text = "";
+                    buyoutPriceInputField.text = "";
                     
                     // Clear the image
                     if (_sellIconImage == null)
@@ -1740,7 +1751,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 ShowItemsByCategory("TwoHandMelee");
             });
             
-            var oneHandedDaggers = CreateTypeSubCategoryButton("One-Handed Daggers", _weaponsTypeSubPanel.transform);
+            var oneHandedDaggers = CreateTypeSubCategoryButton("Daggers", _weaponsTypeSubPanel.transform);
             oneHandedDaggers.onClick.AddListener(() =>
             {
                 if (_buyButton != null)
@@ -1749,13 +1760,22 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 ShowItemsByCategory("OneHandDagger");
             });
             
-            var twoHandedStaffs = CreateTypeSubCategoryButton("Two-Handed Staffs", _weaponsTypeSubPanel.transform);
+            var twoHandedStaffs = CreateTypeSubCategoryButton("Staffs", _weaponsTypeSubPanel.transform);
             twoHandedStaffs.onClick.AddListener(() =>
             {
                 if (_buyButton != null)
                     SetButtonInteractable(_buyButton, false, _buyButtonEnabledTextColor, _buyButtonDisabledTextColor);
                 
                 ShowItemsByCategory("TwoHandStaff");
+            });
+            
+            var twoHandedBows = CreateTypeSubCategoryButton("Bows", _weaponsTypeSubPanel.transform);
+            twoHandedBows.onClick.AddListener(() =>
+            {
+                if (_buyButton != null)
+                    SetButtonInteractable(_buyButton, false, _buyButtonEnabledTextColor, _buyButtonDisabledTextColor);
+                
+                ShowItemsByCategory("TwoHandBow");
             });
             
             int index = -1;
@@ -1861,7 +1881,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 _selectedClass = GameData.ClassDB.Stormcaller;
 
                 ShowItemsByCategory("Armor");
-                ToggleWeaponsTypeSubPanel(stormcaller.transform.parent);
+                ToggleArmorTypeSubPanel(stormcaller.transform.parent);
             });
             
             int index = -1;
@@ -2176,7 +2196,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
         {
             var totalWidth = _listingPanelRoot.GetComponent<RectTransform>().rect.width;
 
-            if (totalWidth <= 0f) totalWidth = _auctionHouseUIWidth * 0.75f;
+            if (totalWidth <= 0f) totalWidth = UIManager.MainUIWidth * 0.75f;
 
             var itemNameWidth = totalWidth * 0.40f;
             var levelWidth = totalWidth * 0.10f;
@@ -2456,7 +2476,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
         _isLoadingPage = true;
 
-        _activeListingCoroutine = StartCoroutine(GetListingsByCategoryAsync(_currentCategory, _loadedPage, _listingsPerPage, listings =>
+        _activeListingCoroutine = StartCoroutine(GetListingsByCategoryAsync(_currentCategory, _loadedPage, ListingsPerPage, listings =>
         {
             _listingPanelRoot.SetActive(false);
             
@@ -2557,6 +2577,11 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
                 slotTypes = [Item.SlotType.Primary, Item.SlotType.Secondary, Item.SlotType.PrimaryOrSecondary];
                 weaponTypes = [Item.WeaponType.TwoHandStaff];
                 break;
+            
+            case "TwoHandBow":
+                slotTypes = [Item.SlotType.Primary];
+                weaponTypes = [Item.WeaponType.TwoHandBow];
+                break;
 
             case "Armor":
                 slotTypes = [
@@ -2609,10 +2634,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
 
     public bool IsAuctionHouseWindowOpen()
     {
-        if (Instance == null || Instance.auctionHouseUIRoot == null)
-            return false;
-            
-        return Instance.auctionHouseUIRoot.activeSelf;
+        return UIManager.IsAuctionHouseWindowOpen();
     }
     
     public bool IsAuctionHouseSellWindowOpen()
@@ -2646,10 +2668,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
     
     public bool HandleAuctionHouseWindowClosing(AuctionHouseUI instance, bool force = false)
     {
-        if (Instance == null || Instance.auctionHouseUIRoot == null)
-            return false;
-            
-        if (!Instance.auctionHouseUIRoot.activeSelf)
+        if (UIManager.IsAuctionHouseWindowOpen() == false)
             return false;
             
         var locField = typeof(AuctionHouseUI).GetField("Loc", BindingFlags.NonPublic | BindingFlags.Instance);
