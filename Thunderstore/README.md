@@ -7,6 +7,22 @@ Provides an advanced Auction House UI for buying and selling.
 - Extract the mod into *Erenshor\BepInEx\plugins* folder
 
 ## Patch Notes
+1.1.3
+- Remove drag handle (Blue Diamond) because it's breaking the layout.
+- Window is no longer draggable, this is a temp fix.
+
+1.1.2
+- Fix bug causing main window to not be centered.
+
+1.1.1
+- Add Bows filter section to weapons
+- Move blue diamond drag handle to bottom left to assist with screen size issues
+- Scale the window size better based on resolution
+
+1.1.0
+- Stormcaller patch v0.2 compatibility updates
+- Add Stormcaller option to class filters
+
 1.0.4
 - Fixed a UI bug allowing items in the sell listing to be duped.
 
