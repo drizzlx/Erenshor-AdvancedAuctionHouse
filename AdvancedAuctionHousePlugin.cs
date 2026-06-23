@@ -2453,7 +2453,7 @@ public class AdvancedAuctionHousePlugin : BaseUnityPlugin
             if (_loadedPage == 0)
                 CreateListingHeaderRow(_listingPanelRoot.transform); // Only on first load
 
-            foreach (var listing in listings)
+            foreach (var listing in listings.OrderByDescending(i => i.Item.ItemLevel).ThenBy(i => i.Item.ItemName).ThenBy(i => i.Price))
                 CreateListingRow(listing, _listingPanelRoot.transform);
 
             _loadedPage++;
